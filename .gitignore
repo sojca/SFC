@@ -1,0 +1,5 @@
+*.o
+*#
+*~
+*dump
+rce-demonstrator
