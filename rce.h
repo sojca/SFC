@@ -12,4 +12,8 @@
 
 
 
+int rce_main(I_VECTORS *, HYPERSPHERES *, ORS *);
+void parser(I_VECTORS *, char *);
+
+
 #endif

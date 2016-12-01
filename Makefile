@@ -17,13 +17,13 @@ gui: gui.o
 	$(CC) $(LDFLAGS) -c $(LDLIBS)
 
 or.o: or.c
-	$(CC) $(LDFLAGS) or.c -c -lm
+	$(CC) $(LDFLAGS) or.c -c
 
 input.o: input.c
-	$(CC) $(LDFLAGS) input.c -c -lm
+	$(CC) $(LDFLAGS) input.c -c
 
 hypersphere.o: hypersphere.c input.h or.h
-	$(CC) $(LDFLAGS) hypersphere.c -c -lm
+	$(CC) $(LDFLAGS) hypersphere.c -c
 
 rce.o: rce.c 
-	$(CC) $(LDFLAGS) rce.c -c -lm
+	$(CC) $(LDFLAGS) rce.c -c

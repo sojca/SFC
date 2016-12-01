@@ -8,14 +8,15 @@
 #include "hypersphere.h"
 #include "input.h"
 #include "or.h"
-// #include "gui.h"
+#include "rce.h"
 
 
-void parser(I_VECTORS *list_vect, double *radius) 
+void parser(I_VECTORS *list_vect, char *file_name) 
 {
 
+	double radius = 0;
 	FILE *fp;
-	fp = fopen("vector.i", "r");
+	fp = fopen(file_name, "r");
 
 	char c[2];
 	memset(c, 0, 2);
@@ -26,8 +27,10 @@ void parser(I_VECTORS *list_vect, double *radius)
 	int class;
 	int *vect;
 	vect = NULL;
+
 	int i = 0;
-	int max = 0;
+	int dimensions = 0;
+	
 	int state = 0;
 
 	while((c[0] = fgetc(fp)) != EOF){
@@ -68,7 +71,7 @@ void parser(I_VECTORS *list_vect, double *radius)
 					strncat(buff, c, 1);
 				}
 				else {
-					*radius = strtof(buff, NULL);
+					radius = strtof(buff, NULL);
 					memset(buff, 0, 128);
 
 					state = 0;
@@ -80,13 +83,14 @@ void parser(I_VECTORS *list_vect, double *radius)
 				if(isdigit(c[0]))
 					strncat(buff, c, 1);
 				else {
-					*radius = strtof(buff, NULL);
+					radius = strtof(buff, NULL);
 					memset(buff, 0, 128);
 
 					state = 0;
 				}
 				continue;
 				break;
+
 			case(5):
 				if(isdigit(c[0])){
 					state = 6;
@@ -96,17 +100,19 @@ void parser(I_VECTORS *list_vect, double *radius)
 					continue;
 				continue;
 				break;
+
 			case(6):
 				if(isdigit(c[0])){
 					strncat(buff, c, 1);
 					continue;
 				}
-				sscanf(buff, "%i", &max);
-				init_input_vector_list(list_vect, max, 0);
+				sscanf(buff, "%i", &dimensions);
+				init_input_vector_list(list_vect, dimensions, radius);
 				memset(buff, 0, 128);
 				state = 0;
 				continue;
 				break;
+
 			case(10):
 				if(isdigit(c[0])){
 					strncat(buff, c, 1);
@@ -144,6 +150,7 @@ void parser(I_VECTORS *list_vect, double *radius)
 				}
 				continue;
 				break;
+
 			case(12):
 				if(c[0] == ','){
 					state = 10;
@@ -159,7 +166,8 @@ void parser(I_VECTORS *list_vect, double *radius)
 					state = 14;
 					continue;
 				} 
-				break;					
+				break;	
+
 			case(14):
 				if(isdigit(c[0])){
 					strncat(buff, c, 1);
@@ -184,16 +192,18 @@ void parser(I_VECTORS *list_vect, double *radius)
 
 
 	} 
+	set_radius(list_vect, radius);
+
 	// while((c[0] = fgetc(fp)) != EOF);
 
 
-	// select_first_input_vector(list_vect);
-	// while(is_active_input_vector(list_vect)){
-	// 	for(i = 0; i < max; i++)
-	// 		printf("%2i ", list_vect->Active->i[i]);
-	// 	printf("%3i\n", list_vect->Active->class);
-	// 	select_next_input_vector(list_vect);
-	// }
+	select_first_input_vector(list_vect);
+	while(is_active_input_vector(list_vect)){
+		for(i = 0; i < dimensions; i++)
+			printf("%2i ", list_vect->Active->i[i]);
+		printf("%3i\n", list_vect->Active->class);
+		select_next_input_vector(list_vect);
+	}
 
 	free(vect);
 	fclose(fp);
@@ -201,98 +211,86 @@ void parser(I_VECTORS *list_vect, double *radius)
 }
 
 
-// int main(int argc, char *argv[])
-// {
+int rce_main(I_VECTORS *i_vector, HYPERSPHERES *h, ORS *o)
+{
 
-// 	// start(argc, argv);
-
-// 	bool modif = false;
-// 	bool hit = false;
+	int i;
+	bool modif = false;
+	bool hit = false;
 	
-// 	double radius = 0;
-// 	I_VECTORS i_vector; 
-// 	HYPERSPHERES h;
-// 	ORS o;
 	
-// 	init_hyperspheres_list(&h);
-// 	init_ors_list(&o);
 
-// 	parser(&i_vector, &radius);
+	// parser(&i_vector, &radius);
 
 	
-// 	do {
-// 		modif = false;
-// 		select_first_input_vector(&i_vector);
-// 		while(is_active_input_vector(&i_vector)){
-// 			// printf("%i\n", i_vector.Active->i[0]);
-// 			hit = false;
-// 			select_first_hypersphere(&h);
-// 			while(is_active_hypersphere(&h)){
-// 				double distance = 0;
+	do {
+		modif = false;
 
-// 				for(unsigned i = 0; i < i_vector.lenght; i++){
-// 					distance += pow(i_vector.Active->i[i] - h.Active->i[i], 2);
-// 				}
-// 				distance = sqrt(distance);
+		select_first_input_vector(i_vector);
+		while(is_active_input_vector(i_vector)){
+			hit = false;
 
-// 				if (distance <= h.Active->radius){
-// 					if(h.Active->class == i_vector.Active->class)
-// 						hit = true;
-// 					else{
-// 						h.Active->radius = distance / 2.0;	
-// 						modif = true;
-// 					}
-// 				}
+			select_first_hypersphere(h);
+			while(is_active_hypersphere(h)){
+				double distance = 0;
 
-// 				select_next_hypersphere(&h);			
-// 			}
-// 			if(!hit){
-// 				insert_last_hypersphere(&h, radius, i_vector.Active->class, i_vector.Active->i, i_vector.lenght);
-// 				select_last_hypersphere(&h);	
+				for(i = 0; i < i_vector->dimensions; i++){
+					distance += pow(i_vector->Active->i[i] - h->Active->i[i], 2);
+				}
+				distance = sqrt(distance);
 
-// 				modif = true;
-// 				if(is_exist_or_with_class(&o, h.Active->class)){
-// 					h.Active->or_layer = get_or_with_class(&o, h.Active->class);
-// 				}
-// 				else{
-// 					insert_last_or(&o, h.Active->class);
-// 					select_last_or(&o);
+				if (distance <= h->Active->radius){
+					if(h->Active->class == i_vector->Active->class){
+						hit = true;
+					}
+					else{
+						h->Active->radius = distance / 2.0;	
+						modif = true;
+					}
+				}
 
-// 					h.Active->or_layer = o.Active;
-// 				}
-// 			}
+				select_next_hypersphere(h);			
+			}
+			if(!hit){
+				insert_last_hypersphere(h, i_vector->radius, i_vector->Active->class, i_vector->Active->i, i_vector->dimensions);
+				select_last_hypersphere(h);	
 
+				modif = true;
+				if(is_exist_or_with_class(o, h->Active->class)){
+					h->Active->or_layer = get_or_with_class(o, h->Active->class);
+				}
+				else{
+					insert_last_or(o, h->Active->class);
+					select_last_or(o);
 
-// 			select_next_input_vector(&i_vector);
-// 		}
-// 	} while(modif);
+					h->Active->or_layer = o->Active;
+				}
+			}
 
 
-// 	select_first_hypersphere(&h);
-// 	while(is_active_hypersphere(&h)){
-// 		printf("%f\n", h.Active->radius);
-// 		for(unsigned i = 0; i < i_vector.lenght; i++){
-// 			printf("%3i ", h.Active->i[i]);
-// 		}
-// 		printf("\n--\n");
-// 		select_next_hypersphere(&h);			
-// 	}
+			select_next_input_vector(i_vector);
+		}
+	} while(modif);
 
 
-// 	select_first_or(&o);
-// 	while(is_active_or(&o)){
-// 		printf("%i\n", o.Active->class);
-// 		printf("--\n");
-// 		select_next_or(&o);			
-// 	}
-
-// 	start(argc, argv, &i_vector, &h, &o);
-
-
-// 	dispose_input_vector_list(&i_vector);
-// 	dispose_ors_list(&o);
-// 	dispose_hyperspheres_list(&h);
+	select_first_hypersphere(h);
+	while(is_active_hypersphere(h)){
+		printf("%f\n", h->Active->radius);
+		for(i = 0; i < i_vector->dimensions; i++){
+			printf("%3i ", h->Active->i[i]);
+		}
+		printf("\n--\n");
+		select_next_hypersphere(h);			
+	}
 
 
-// 	return 0;
-// }
+	select_first_or(o);
+	while(is_active_or(o)){
+		printf("%i\n", o->Active->class);
+		printf("--\n");
+		select_next_or(o);			
+	}
+
+
+	return 0;
+}

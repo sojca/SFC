@@ -1,6 +1,10 @@
 #include <gtk/gtk.h>
 #include <cairo/cairo.h>
 #include <math.h>
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "gui.h"
 #include "vector_editor.h"
@@ -12,7 +16,11 @@
 
 static cairo_surface_t *surface;
 
+gboolean started = TRUE;
+
 I_VECTORS vectors;
+HYPERSPHERES hyperspheres;
+ORS ors;
 
 gboolean delete_event(GtkWidget *widget, GdkEvent *event, gpointer data)
 {
@@ -33,41 +41,6 @@ static void clear(GtkWidget *widget, gpointer data)
 	gdk_window_invalidate_rect(gtk_widget_get_window(data), NULL, FALSE);
 }
 
-gboolean draw_release(GtkWidget *widget, GdkEventButton *event, HYPERSPHERES *data)
-{
-	if (surface == NULL) return FALSE;
-
-	cairo_t *cr;
-	cr = cairo_create(surface);
-
-	cairo_move_to(cr, 12, 10);
-
-	cairo_line_to(cr, 100, 100);
-	cairo_stroke(cr);
-
-	select_first_hypersphere(data);
-	while(is_active_hypersphere(data)){
-		printf("%f\n", data->Active->radius);
-	// 	// for(unsigned i = 0; i < i_vector.lenght; i++){
-	// 		// printf("%3i ", h.Active->i[i]);
-	// 	// }
-		printf("\n--\n");
-		select_next_hypersphere(data);			
-	}	
-
-	// if((event->state & GDK_SHIFT_MASK) == GDK_SHIFT_MASK)
-		// draw_resource(cr, event->x, event->x);
-	// else
-	// draw_resource(cr, event->x, event->y, event->state);
-	
-	cairo_destroy(cr);
-
-	/* invalidace obdelniku cary v okne, vynuceni expose */
-	gdk_window_invalidate_rect(gtk_widget_get_window(widget), NULL, FALSE);
-
-	return TRUE;
-}
-
 gboolean next_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer *data)
 {
 	return TRUE;
@@ -78,13 +51,46 @@ gboolean clear_rce_drawing(GtkWidget *widget, GdkEventButton *event, gpointer *d
 	return TRUE;
 }
 
+gboolean stop_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer *data)
+{
+	return TRUE;
+}
+
+
+ gboolean start_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer data)
+{
+	
+	started = TRUE;
+	
+	dispose_hyperspheres_list(&hyperspheres);
+	dispose_ors_list(&ors);
+
+	rce_main(&vectors, &hyperspheres, &ors);	
+	// draw_release();	
+	GtkWidget *toplevel;
+
+	toplevel = gtk_widget_get_toplevel(widget);
+	// GtkBuilder *builder;
+	// GtkWidget *draw;
+	
+	// builder = gtk_builder_new_from_file("glade/rce.glade");
+	// gtk_builder_connect_signals(builder, NULL);
+
+	// draw = GTK_WIDGET(gtk_builder_get_object (builder, "drawingarea1"));
+	gtk_widget_queue_draw (toplevel);
+
+	// time_handler(draw);
+
+	return TRUE;
+}
+
 gboolean open_vector_editor(GtkWidget *widget, GdkEventButton *event, gpointer *data)
 {
 	int result = create_vector_editor();
 
-	
 	printf("ok %i\n", result == GTK_RESPONSE_OK);
 	printf("cancel %i\n", result == GTK_RESPONSE_CANCEL);
+	
 	return TRUE;
 }
 
@@ -108,6 +114,99 @@ gboolean open_vector_editor(GtkWidget *widget, GdkEventButton *event, gpointer *
 	cairo_set_source_surface(cr, surface, 0, 0);
 	cairo_paint(cr);
 
+	if(started == FALSE) return FALSE;
+
+	started = FALSE;
+	int v, h, o;
+
+	double middle = 0.96;
+	double border = 0.2;
+	double line = 0.2;
+
+	for(v = 1; v <= vectors.dimensions; v++){
+
+		cairo_set_line_width(cr, 4);
+		cairo_set_source_rgb(cr, border, border, border);
+
+		cairo_arc(cr, 50, v*50, 10, 0, 2 * M_PI);
+		cairo_stroke_preserve(cr);
+		
+		cairo_set_source_rgb(cr, middle, middle, middle);
+		cairo_fill(cr);
+
+	}
+
+	o = 1;
+	select_first_or(&ors);
+	while(is_active_or(&ors)){
+		printf("%i\n", ors.Active->class);
+
+		cairo_set_line_width(cr, 4);
+		cairo_set_source_rgb(cr, border, border, border);
+
+		cairo_arc(cr, 450, o*70, 20, 0, 2 * M_PI);
+		cairo_stroke_preserve(cr);
+		
+		cairo_set_source_rgb(cr, middle, middle, middle);
+		cairo_fill(cr);
+
+		select_next_or(&ors);	
+		o++;		
+	}
+
+	h = 1;
+	select_first_hypersphere(&hyperspheres);
+	while(is_active_hypersphere(&hyperspheres)){
+		// printf("%i\n", hyperspheres.Active->class);
+		cairo_set_source_rgb(cr, line, line, line);
+		cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
+		cairo_set_line_width(cr, 4);
+
+		for(v = 1; v <= vectors.dimensions; v++){
+			cairo_move_to(cr, 61, v*50);
+			cairo_line_to(cr, 220, h*80);
+		}
+		cairo_stroke(cr);
+
+		o = 1;
+
+		select_first_or(&ors);
+		while(is_active_or(&ors)){
+			printf("%i\n", ors.Active->class);
+
+			if(ors.Active == hyperspheres.Active->or_layer){
+				cairo_move_to(cr, 430, o*70);
+				cairo_line_to(cr, 220, h*80);
+				cairo_stroke(cr);
+				break;
+			}
+			select_next_or(&ors);	
+			o++;		
+		}		
+
+		cairo_set_source_rgb(cr, border, border, border);
+		cairo_set_line_width(cr, 9);
+
+		cairo_arc(cr, 250, 0 + h*80, 30, 0, 2 * M_PI);
+		cairo_stroke_preserve(cr);
+		
+		cairo_set_source_rgb(cr, middle, middle, middle);
+		cairo_fill(cr);
+
+		select_next_hypersphere(&hyperspheres);			
+		h++;
+	}
+
+
+	// cairo_set_source_rgb(cr, 0, 1, 1);
+
+	// cairo_move_to(cr, 12, 10);
+
+	// cairo_line_to(cr, 100, 100);
+	// cairo_stroke(cr);
+
+
+
 
 	g_print("draw\n");
 	return FALSE;
@@ -119,129 +218,76 @@ int main(int argc, char *argv[])
 	// /* inicializace GTK+ */
 	gtk_init(&argc, &argv);
 
+	// int aflag = 0;
+	// int bflag = 0;
+	char *file_name = NULL;
+	// int index;
+	int c;
 
-	// GtkWidget *b;
-	// GtkAdjustment *adjustment;
+	opterr = 0;
+	while ((c = getopt (argc, argv, "i:")) != -1){
+		switch (c) {
+			// case 'a':
+			// 	aflag = 1;
+			// 	break;
+			// case 'b':
+			// 	bflag = 1;
+			// 	break;
+			case 'i':
+				file_name = optarg;
+				break;
+			case '?':
+				if (optopt == 'i')
+					fprintf (stderr, "Option -%c requires an argument with file name.\n", optopt);
+				else if (isprint (optopt))
+					fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+				else
+					fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
+				return 1;
+			default:
+				abort ();
+		}
+	}
+	// printf ("aflag = %d, bflag = %d, cvalue = %s\n", aflag, bflag, cvalue);
 
-	// adjustment = gtk_adjustment_new (2.50, 0.0, 5.0, 0.01, 0.1, 0.0);
+	// for (index = optind; index < argc; index++)
+		// printf ("Non-option argument %s\n", argv[index]);
 
-	// b = gtk_spin_button_new (adjustment, 0.01, 2);
+	if(file_name != NULL)
+		parser(&vectors, file_name);
+	else 
+		init_input_vector_list(&vectors, 0, 3.5);
 
+	init_hyperspheres_list(&hyperspheres);
+	init_ors_list(&ors);
 
-
-	// window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-	// g_signal_connect(G_OBJECT(window), "destroy",
-	// 	G_CALLBACK(destroy_signal), NULL);
-	// g_signal_connect(G_OBJECT(window), "delete_event",
-	// 	G_CALLBACK(delete_event), NULL);
-
-	// /* hlavni kontejner */
-	// /* gtk_vbox deprecated */
-	// vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-	// // hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-
-	// gtk_container_add(GTK_CONTAINER(window), vbox);
-
-	// /* kreslici plocha */
-	// draw = gtk_drawing_area_new();
-
-	// gtk_widget_set_size_request(draw, 300, 300);
-	// gtk_box_pack_start(GTK_BOX(vbox), draw, TRUE, TRUE, 0);
-	// gtk_box_pack_start(GTK_BOX(vbox), b, TRUE, TRUE, 0);
-
-	// unsigned i = 0;
-	// select_first_hypersphere(h);
-	// while(is_active_hypersphere(h)){
-	// 	printf("%f\n", (h->Active)->radius);
-	// 	for(i = 0; i < i_vector->lenght; i++){
-	// 		printf("%3i ", (h->Active)->i[i]);
-	// 	}
-	// 	printf("\n--\n");
-	// 	select_next_hypersphere(h);			
-	// }	
-
-
-
-	// g_signal_connect(G_OBJECT(draw), "draw",
-	// 	G_CALLBACK(draw_event), NULL);
-	// g_signal_connect(G_OBJECT(draw), "configure-event",
-	// 	G_CALLBACK(draw_config), NULL);
-	// g_signal_connect(G_OBJECT(draw), "button-release-event",
-		// G_CALLBACK(draw_release), (HYPERSPHERES*) h);
-		// G_CALLBACK(draw_release), NULL);
-
-	// /* registrace vstupnich udalosti pro okno, masky viz XSelectInput() */
-	// gtk_widget_add_events(draw, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK );
-
-	// // button = gtk_button_new_with_label("Clear");
-	// // gtk_box_pack_start(GTK_BOX(vbox), button, FALSE, FALSE, 0);
-	// // g_signal_connect(G_OBJECT(button), "clicked",
-	// // 	G_CALLBACK(clear), draw);
-
-	
-	// // gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
-	
-	// /* zobrazit okna */   
-	// gtk_widget_show_all(window);
-
-// ######################### BUILDER STUFF START ########################
-	
-
-	// GdkPixmap *pixmap;
- //    GtkWidget *image;
- //    GtkWidget *window;
- //    cairo_t *cr;
-
- //    gtk_init(&argc, &argv);
-
- //    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
- //    g_signal_connect(G_OBJECT(window), "delete-event", G_CALLBACK(gtk_main_quit), NULL);
-	
-	// image = gtk_image_new();
-
- //    gtk_widget_show_all(window);
-
- //    pixmap = gdk_pixmap_new(window->window, 100, 100, -1);
- //    cr = gdk_cairo_create(pixmap);
- //    cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);    
- //    cairo_rectangle(cr, 10, 10, 80, 80);
- //    cairo_fill(cr);
- //    cairo_destroy(cr);
-
- //    cr = NULL;
-
-
-
-	// gtk_image_set_from_pixmap(GTK_IMAGE(image), pixmap, NULL);
- //    // image = gtk_image_new_from_pixmap(pixmap, NULL);
-
- //    gtk_container_add(GTK_CONTAINER(window), image);
-
-
- //    gtk_widget_show(image);
-
-
-
- //    gtk_main();
-	init_input_vector_list(&vectors, 0, 3.5);
 
 	GtkBuilder *builder;
 	GtkWidget *window;
+	// GtkWidget *draw;
 	
 	builder = gtk_builder_new_from_file("glade/rce.glade");
 	gtk_builder_connect_signals(builder, NULL);
 
 	window = GTK_WIDGET(gtk_builder_get_object (builder, "window1"));
+	// draw = GTK_WIDGET(gtk_builder_get_object (builder, "drawingarea1"));
 	
 	g_object_unref(builder);
-
+	// gtk_widget_add_events(window, GDK_BUTTON_PRESS_MASK );
+	// g_signal_connect(G_OBJECT(window), "button-press-event", G_CALLBACK(start_rce_step), NULL);
+	
+	// g_signal_connect(G_OBJECT(draw), "button-release-event", G_CALLBACK(draw_release), NULL);
+	// gtk_widget_add_events(draw, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK 	);
+	
+	// g_timeout_add(100, (GSourceFunc) time_handler, (gpointer) window);
 	
 // ######################### BUILDER STUFF END ##########################
 	gtk_widget_show_all(window);
-
 	gtk_main();
 
 	dispose_input_vector_list(&vectors);
+	dispose_ors_list(&ors);
+	dispose_hyperspheres_list(&hyperspheres);
 
 	return 0;
 }

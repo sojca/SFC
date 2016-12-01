@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.16.1 -->
+<!-- Generated with glade 3.20.0 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkWindow" id="window1">
@@ -207,6 +207,7 @@
                 <property name="is_important">True</property>
                 <property name="label" translatable="yes">Start</property>
                 <property name="use_underline">True</property>
+                <signal name="clicked" handler="start_rce_step" object="drawingarea1" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -220,6 +221,7 @@
                 <property name="is_important">True</property>
                 <property name="label" translatable="yes">Stop</property>
                 <property name="use_underline">True</property>
+                <signal name="clicked" handler="stop_rce_step" swapped="no"/>
               </object>
               <packing>
                 <property name="expand">False</property>
