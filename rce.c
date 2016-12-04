@@ -11,8 +11,9 @@
 #include "or.h"
 #include "rce.h"
 
-extern pthread_mutex_t lock;
-extern pthread_cond_t cond;
+extern pthread_mutex_t lock_rce;
+extern pthread_mutex_t lock_mem;
+extern pthread_cond_t cond_rce;
 
 
 extern I_VECTORS vectors;
@@ -208,26 +209,21 @@ void parser(I_VECTORS *list_vect, char *file_name)
 }
 
 void next_step(){
-	printf("rce next_step\n");
-	// pthread_mutex_unlock(&lock);
-	pthread_cond_signal(&cond);
+
+	pthread_cond_signal(&cond_rce);
 }
 
 
 void *rce_main()
-// void *rce_main(void *i_vector, void *h, void *o)
-// void *rce_main(I_VECTORS *i_vector, HYPERSPHERES *h, ORS *o)
 {
 
 	int i;
 	bool modif = false;
 	bool hit = false;
 	
-	printf("waiting to release ...\n");
-	// pthread_mutex_lock(&lock);
-	// pthread_mutex_lock(&lock);
-pthread_cond_wait(&cond, &lock);
-	printf("RELEASED!\n");
+	pthread_mutex_lock(&lock_rce);
+	
+	pthread_cond_wait(&cond_rce, &lock_rce);
 
 	do {
 		modif = false;
@@ -236,7 +232,7 @@ pthread_cond_wait(&cond, &lock);
 		while(is_active_input_vector(&vectors)){
 			hit = false;
 			
-
+			pthread_mutex_lock(&lock_mem);
 			select_first_hypersphere(&hyperspheres);
 			while(is_active_hypersphere(&hyperspheres)){
 				double distance = 0;
@@ -275,15 +271,16 @@ pthread_cond_wait(&cond, &lock);
 				}
 			}
 			
-			// pthread_mutex_lock(&lock);
-			
-			pthread_cond_wait(&cond, &lock);
+			pthread_mutex_unlock(&lock_mem);
+			pthread_cond_wait(&cond_rce, &lock_rce);
 
 
 			select_next_input_vector(&vectors);
 		}
 
 	} while(modif);
+
+	pthread_mutex_unlock(&lock_rce);
 
 
 	return NULL;
