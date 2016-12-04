@@ -24,12 +24,15 @@ extern HYPERSPHERES hyperspheres;
 extern ORS ors;
 
 
-void parser(I_VECTORS *list_vect, char *file_name) 
+int parser(I_VECTORS *list_vect, char *file_name) 
 {
 
 	double radius = 0;
 	FILE *fp;
 	fp = fopen(file_name, "r");
+	
+	if(fp == NULL)
+		return -1;
 
 	char c[2];
 	memset(c, 0, 2);
@@ -209,6 +212,8 @@ void parser(I_VECTORS *list_vect, char *file_name)
 
 	free(vect);
 	fclose(fp);
+
+	return 0;
 }
 
 

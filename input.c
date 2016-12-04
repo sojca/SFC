@@ -150,14 +150,12 @@ void insert_first_input_vector (I_VECTORS *L, int *vector, int class) {
 	I_VECTOR ptr = malloc(sizeof(struct input));
 	
 	if(ptr == NULL)
-		// Error();
 		fprintf(stderr, "Malloc err\n");
 
 
 	ptr->i = malloc(sizeof(int)*(L->dimensions));
 	
 	if(ptr->i == NULL)
-		// Error();
 		fprintf(stderr, "Malloc err\n");
 
 
@@ -179,14 +177,12 @@ void insert_last_input_vector (I_VECTORS *L, int *vector, int class) {
 	I_VECTOR ptr = malloc(sizeof(struct input));
 	
 	if(ptr == NULL)
-		// Error();
 		fprintf(stderr, "Malloc err\n");
 
 
 	ptr->i = malloc(sizeof(int)*(L->dimensions));
 
 	if(ptr->i == NULL)
-		// Error();
 		fprintf(stderr, "Malloc err\n");
 
 

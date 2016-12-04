@@ -61,7 +61,7 @@
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
                 <property name="is_important">True</property>
-                <property name="label" translatable="yes">Next step</property>
+                <property name="label" translatable="yes">Step</property>
                 <property name="use_underline">True</property>
                 <signal name="clicked" handler="next_rce_step" swapped="no"/>
               </object>

@@ -25,7 +25,7 @@
 
 
 void *rce_main();
-void parser(I_VECTORS *, char *);
+int parser(I_VECTORS *, char *);
 void next_step();
 
 #endif

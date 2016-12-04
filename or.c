@@ -34,7 +34,6 @@ void insert_first_or (ORS *L, int class) {
 	
 	if(ptr == NULL)
 		fprintf(stderr, "Malloc err\n");
-		// Error();
 
 	ptr->class = class;
 	ptr->next = L->First;
@@ -53,7 +52,6 @@ void insert_last_or (ORS *L, int class) {
 	
 	if(ptr == NULL)
 		fprintf(stderr, "Malloc err\n");
-		// Error();
 
 	ptr->class = class;
 	ptr->next = NULL;

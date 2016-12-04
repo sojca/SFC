@@ -576,7 +576,11 @@ int main(int argc, char *argv[]) {
 
 	if(file_name != NULL) {
 
-		parser(&vectors, file_name);
+		if(parser(&vectors, file_name) != 0){
+			fprintf (stderr, "File does not exist.\n");
+			return 1;
+		}
+
 		status = START;
 	}
 	else {
