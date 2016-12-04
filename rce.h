@@ -11,9 +11,9 @@
 #endif
 
 
-
-int rce_main(I_VECTORS *, HYPERSPHERES *, ORS *);
+void *rce_main();
+// void *rce_main(void *, void *, void *);
 void parser(I_VECTORS *, char *);
-
+void next_step();
 
 #endif

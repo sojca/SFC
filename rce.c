@@ -4,11 +4,20 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <pthread.h>
 
 #include "hypersphere.h"
 #include "input.h"
 #include "or.h"
 #include "rce.h"
+
+extern pthread_mutex_t lock;
+extern pthread_cond_t cond;
+
+
+extern I_VECTORS vectors;
+extern HYPERSPHERES hyperspheres;
+extern ORS ors;
 
 
 void parser(I_VECTORS *list_vect, char *file_name) 
@@ -194,103 +203,88 @@ void parser(I_VECTORS *list_vect, char *file_name)
 	} 
 	set_radius(list_vect, radius);
 
-	// while((c[0] = fgetc(fp)) != EOF);
-
-
-	select_first_input_vector(list_vect);
-	while(is_active_input_vector(list_vect)){
-		for(i = 0; i < dimensions; i++)
-			printf("%2i ", list_vect->Active->i[i]);
-		printf("%3i\n", list_vect->Active->class);
-		select_next_input_vector(list_vect);
-	}
-
 	free(vect);
 	fclose(fp);
+}
 
+void next_step(){
+	printf("rce next_step\n");
+	// pthread_mutex_unlock(&lock);
+	pthread_cond_signal(&cond);
 }
 
 
-int rce_main(I_VECTORS *i_vector, HYPERSPHERES *h, ORS *o)
+void *rce_main()
+// void *rce_main(void *i_vector, void *h, void *o)
+// void *rce_main(I_VECTORS *i_vector, HYPERSPHERES *h, ORS *o)
 {
 
 	int i;
 	bool modif = false;
 	bool hit = false;
 	
-	
+	printf("waiting to release ...\n");
+	// pthread_mutex_lock(&lock);
+	// pthread_mutex_lock(&lock);
+pthread_cond_wait(&cond, &lock);
+	printf("RELEASED!\n");
 
-	// parser(&i_vector, &radius);
-
-	
 	do {
 		modif = false;
 
-		select_first_input_vector(i_vector);
-		while(is_active_input_vector(i_vector)){
+		select_first_input_vector(&vectors);
+		while(is_active_input_vector(&vectors)){
 			hit = false;
+			
 
-			select_first_hypersphere(h);
-			while(is_active_hypersphere(h)){
+			select_first_hypersphere(&hyperspheres);
+			while(is_active_hypersphere(&hyperspheres)){
 				double distance = 0;
 
-				for(i = 0; i < i_vector->dimensions; i++){
-					distance += pow(i_vector->Active->i[i] - h->Active->i[i], 2);
+				for(i = 0; i < (&vectors)->dimensions; i++){
+					distance += pow((&vectors)->Active->i[i] - (&hyperspheres)->Active->i[i], 2);
 				}
 				distance = sqrt(distance);
 
-				if (distance <= h->Active->radius){
-					if(h->Active->class == i_vector->Active->class){
+				if (distance <= (&hyperspheres)->Active->radius){
+					if((&hyperspheres)->Active->class == (&vectors)->Active->class){
 						hit = true;
 					}
 					else{
-						h->Active->radius = distance / 2.0;	
+						(&hyperspheres)->Active->radius = distance / 2.0;	
 						modif = true;
 					}
 				}
 
-				select_next_hypersphere(h);			
+				select_next_hypersphere(&hyperspheres);			
 			}
+
 			if(!hit){
-				insert_last_hypersphere(h, i_vector->radius, i_vector->Active->class, i_vector->Active->i, i_vector->dimensions);
-				select_last_hypersphere(h);	
+				insert_last_hypersphere((&hyperspheres), (&vectors)->radius, (&vectors)->Active->class, (&vectors)->Active->i, (&vectors)->dimensions);
+				select_last_hypersphere(&hyperspheres);	
 
 				modif = true;
-				if(is_exist_or_with_class(o, h->Active->class)){
-					h->Active->or_layer = get_or_with_class(o, h->Active->class);
+				if(is_exist_or_with_class((&ors), (&hyperspheres)->Active->class)){
+					(&hyperspheres)->Active->or_layer = get_or_with_class((&ors), (&hyperspheres)->Active->class);
 				}
 				else{
-					insert_last_or(o, h->Active->class);
-					select_last_or(o);
+					insert_last_or((&ors), (&hyperspheres)->Active->class);
+					select_last_or(&ors);
 
-					h->Active->or_layer = o->Active;
+					(&hyperspheres)->Active->or_layer = (&ors)->Active;
 				}
 			}
+			
+			// pthread_mutex_lock(&lock);
+			
+			pthread_cond_wait(&cond, &lock);
 
 
-			select_next_input_vector(i_vector);
+			select_next_input_vector(&vectors);
 		}
+
 	} while(modif);
 
 
-	select_first_hypersphere(h);
-	while(is_active_hypersphere(h)){
-		printf("%f\n", h->Active->radius);
-		for(i = 0; i < i_vector->dimensions; i++){
-			printf("%3i ", h->Active->i[i]);
-		}
-		printf("\n--\n");
-		select_next_hypersphere(h);			
-	}
-
-
-	select_first_or(o);
-	while(is_active_or(o)){
-		printf("%i\n", o->Active->class);
-		printf("--\n");
-		select_next_or(o);			
-	}
-
-
-	return 0;
+	return NULL;
 }

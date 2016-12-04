@@ -65,8 +65,6 @@ int create_vector_editor(){
 			create_vector_spinbutton(j+1, i, get_value(&vectors, i, j));
 		}
 
-		printf("create\n");	
-
 		select_next_input_vector(&vectors);
 		i++;
 	}

@@ -6,6 +6,17 @@
 #include "or.h"
 
 
-int start(int, char**, I_VECTORS* , HYPERSPHERES*, ORS*);
+typedef struct config {
+	int count;
+	int height;
+	int px_to_add_x;
+	int px_to_add_y;
+	int radius;
+	int border;
+} CONFIG_ITEM;
+
+void config_items();
+void draw_network();
+// int start(int, char**, I_VECTORS* , HYPERSPHERES*, ORS*);
 
 #endif

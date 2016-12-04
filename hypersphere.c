@@ -142,3 +142,19 @@ int is_active_hypersphere(HYPERSPHERES *L){
 
 	return (L->Active != NULL)?TRUE:FALSE;	
 }
+
+int size_of_hypersphere_list(HYPERSPHERES *L) {
+
+	HYPERSPHERE ptr = L->Active;
+	int count = 0;
+
+	select_first_hypersphere(L);
+	while(is_active_hypersphere(L)){
+		count++;
+		select_next_hypersphere(L);
+	}
+
+	L->Active = ptr;
+	return count;
+}
+

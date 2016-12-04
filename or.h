@@ -36,5 +36,6 @@ void 	select_next_or(ORS *);
 int 	is_active_or(ORS *);
 int 	is_exist_or_with_class(ORS *, int);
 OR 		get_or_with_class(ORS *, int);
+int 	size_of_ors_list(ORS *);
 
 #endif

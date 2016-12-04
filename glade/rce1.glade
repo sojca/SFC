@@ -264,25 +264,12 @@
           </packing>
         </child>
         <child>
-          <object class="GtkScrolledWindow">
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="shadow_type">in</property>
-            <child>
-              <object class="GtkViewport">
-                <property name="visible">True</property>
-                <property name="can_focus">False</property>
-                <child>
                   <object class="GtkDrawingArea" id="drawingarea1">
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <signal name="configure-event" handler="draw_config" swapped="no"/>
                     <signal name="draw" handler="draw_event" swapped="no"/>
                   </object>
-                </child>
-              </object>
-            </child>
-          </object>
           <packing>
             <property name="expand">True</property>
             <property name="fill">True</property>

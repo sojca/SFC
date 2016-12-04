@@ -4,7 +4,10 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <stdbool.h>
 
 #include "gui.h"
 #include "vector_editor.h"
@@ -14,13 +17,18 @@
 #include "or.h"
 #include "rce.h"
 
-static cairo_surface_t *surface;
+static cairo_surface_t *surface, *old_surface;
 
-gboolean started = TRUE;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 
 I_VECTORS vectors;
 HYPERSPHERES hyperspheres;
 ORS ors;
+
+CONFIG_ITEM v_config;
+CONFIG_ITEM h_config;
+CONFIG_ITEM o_config;
 
 gboolean delete_event(GtkWidget *widget, GdkEvent *event, gpointer data)
 {
@@ -34,20 +42,43 @@ void destroy_signal(GtkWidget *widget, gpointer data)
 
 static void clear(GtkWidget *widget, gpointer data)
 {
+
 	cairo_t *cr = cairo_create(surface);
 	cairo_set_source_rgb(cr, 1, 1, 1);
 	cairo_paint(cr);
 	cairo_destroy(cr);
+ 	cr = cairo_create(old_surface);
+	cairo_set_source_rgb(cr, 1, 1, 1);
+	cairo_paint(cr);
+	cairo_destroy(cr);
+
 	gdk_window_invalidate_rect(gtk_widget_get_window(data), NULL, FALSE);
 }
 
 gboolean next_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer *data)
 {
+	GtkWidget *toplevel;
+
+	next_step();
+
+	toplevel = gtk_widget_get_toplevel(widget);
+	gtk_widget_queue_draw (toplevel);
+
+	clear(toplevel, toplevel);
+	draw_network();
+
 	return TRUE;
 }
 
 gboolean clear_rce_drawing(GtkWidget *widget, GdkEventButton *event, gpointer *data)
 {
+	GtkWidget *toplevel;
+	toplevel = gtk_widget_get_toplevel(widget);
+	dispose_ors_list(&ors);
+	dispose_hyperspheres_list(&hyperspheres);
+
+	clear(toplevel, toplevel);
+
 	return TRUE;
 }
 
@@ -59,27 +90,12 @@ gboolean stop_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer *data)
 
  gboolean start_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer data)
 {
-	
-	started = TRUE;
-	
-	dispose_hyperspheres_list(&hyperspheres);
-	dispose_ors_list(&ors);
-
-	rce_main(&vectors, &hyperspheres, &ors);	
-	// draw_release();	
 	GtkWidget *toplevel;
 
+	draw_network();
+
 	toplevel = gtk_widget_get_toplevel(widget);
-	// GtkBuilder *builder;
-	// GtkWidget *draw;
-	
-	// builder = gtk_builder_new_from_file("glade/rce.glade");
-	// gtk_builder_connect_signals(builder, NULL);
-
-	// draw = GTK_WIDGET(gtk_builder_get_object (builder, "drawingarea1"));
 	gtk_widget_queue_draw (toplevel);
-
-	// time_handler(draw);
 
 	return TRUE;
 }
@@ -90,93 +106,203 @@ gboolean open_vector_editor(GtkWidget *widget, GdkEventButton *event, gpointer *
 
 	printf("ok %i\n", result == GTK_RESPONSE_OK);
 	printf("cancel %i\n", result == GTK_RESPONSE_CANCEL);
-	
+
+	// rce_main(&vectors, &hyperspheres, &ors);
+	config_items();	
+
 	return TRUE;
 }
+static void copy(cairo_surface_t *dest, cairo_surface_t *source)
+{
+	cairo_t *cr;
+	cr = cairo_create(dest);
+	cairo_set_source_surface (cr, source, 0, 0);
 
+	cairo_paint (cr);
+	cairo_destroy(cr);
+}
 
  gboolean draw_config(GtkWidget *widget, GdkEvent *event, gpointer data)
 {
 	GtkAllocation allocation;
-
+	int w;
+	
 	gtk_widget_get_allocation(widget, &allocation);
+	
+	w = (allocation.width > 800) ? allocation.width : 800;
+	if(surface == NULL){
+		surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
+				CAIRO_CONTENT_COLOR, w, 1500);
+		old_surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
+				CAIRO_CONTENT_COLOR, w, 1500);
+		clear(widget, widget);
 
-	surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
-			CAIRO_CONTENT_COLOR, allocation.width, allocation.height);
-		
-	clear(widget, widget);
-	g_print("config %d,%d\n", allocation.width, allocation.height);
-	return TRUE;
-}
+	}
+	else{
+		surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
+				CAIRO_CONTENT_COLOR, w, 1500);
 
- gboolean draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
-{
-	cairo_set_source_surface(cr, surface, 0, 0);
-	cairo_paint(cr);
+		cairo_t *cr;
+		cr = cairo_create(surface);
+		cairo_set_source_rgb(cr, 1, 1, 1);
+		cairo_paint (cr);
+		cairo_set_source_surface (cr, old_surface, 0, 0);
+		cairo_paint (cr);
+		cairo_destroy(cr);
 
-	if(started == FALSE) return FALSE;
+		old_surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
+			CAIRO_CONTENT_COLOR, w, 1500);
+		cr = cairo_create(old_surface);
+		cairo_set_source_rgb(cr, 1, 1, 1);
+		cairo_paint (cr);
+		cairo_set_source_surface (cr, surface, 0, 0);
+		cairo_paint (cr);
+		cairo_destroy(cr);
 
-	started = FALSE;
-	int v, h, o;
-
-	double middle = 0.96;
-	double border = 0.2;
-	double line = 0.2;
-
-	for(v = 1; v <= vectors.dimensions; v++){
-
-		cairo_set_line_width(cr, 4);
-		cairo_set_source_rgb(cr, border, border, border);
-
-		cairo_arc(cr, 50, v*50, 10, 0, 2 * M_PI);
-		cairo_stroke_preserve(cr);
-		
-		cairo_set_source_rgb(cr, middle, middle, middle);
-		cairo_fill(cr);
+		gdk_window_invalidate_rect(gtk_widget_get_window(widget), NULL, FALSE);
 
 	}
 
-	o = 1;
-	select_first_or(&ors);
-	while(is_active_or(&ors)){
-		printf("%i\n", ors.Active->class);
+	// g_print("config %d,%d\n", allocation.width, allocation.height);
 
-		cairo_set_line_width(cr, 4);
-		cairo_set_source_rgb(cr, border, border, border);
+	return TRUE;
+}
 
-		cairo_arc(cr, 450, o*70, 20, 0, 2 * M_PI);
+void config_items() {
+
+	v_config.count = vectors.dimensions;
+	h_config.count = size_of_hypersphere_list(&hyperspheres);
+	o_config.count = size_of_ors_list(&ors);
+
+	v_config.border = 100;
+	h_config.border = 30;
+	o_config.border = 30;
+	
+	v_config.px_to_add_x = 100; 
+	h_config.px_to_add_x = 400;
+	o_config.px_to_add_x = 600;
+
+	v_config.radius = 10; 
+	h_config.radius = 30;
+	o_config.radius = 20;
+
+
+	v_config.px_to_add_y = v_config.radius + v_config.border; 
+	h_config.px_to_add_y = h_config.radius + h_config.border;
+	o_config.px_to_add_y = o_config.radius + o_config.border;
+
+	v_config.height = v_config.count*(v_config.radius*2 + v_config.border);
+	h_config.height = h_config.count*(h_config.radius*2 + h_config.border);
+	o_config.height = o_config.count*(o_config.radius*2 + o_config.border);
+	
+	if(v_config.height < h_config.height){
+		v_config.px_to_add_y += ABS(v_config.height-h_config.height)/2;
+		o_config.px_to_add_y += ABS(o_config.height-h_config.height)/2;
+	}
+	else{
+		h_config.px_to_add_y += ABS(v_config.height-h_config.height)/2;
+		o_config.px_to_add_y += ABS(o_config.height-v_config.height)/2;
+	}
+
+	printf("vectors %i %i\n", v_config.count, v_config.px_to_add_y);
+	printf("hypersp %i %i\n", h_config.count, h_config.px_to_add_y);
+	printf("hypersp %i %i\n", o_config.count, o_config.px_to_add_y);
+}
+
+void draw_network(){
+	
+	config_items();	
+
+	cairo_t *cr;
+
+	cr = cairo_create(surface);
+
+	// printf("%s\n", "draw network");
+	
+	int v, h, o;
+	char str[80];
+	double middle_col = 0.9;
+	double border_col = 0.2;
+	double line = 0.2;
+
+	cairo_set_line_width(cr, 5);
+	cairo_set_source_surface(cr, surface, 0, 0);
+	cairo_paint(cr);
+
+  	cairo_select_font_face(cr, "Arial",
+    	CAIRO_FONT_SLANT_NORMAL,
+      	CAIRO_FONT_WEIGHT_BOLD);
+	cairo_set_font_size(cr, 20);
+
+	for(v = 0; v < vectors.dimensions; v++){
+
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
+
+		cairo_arc(cr, v_config.px_to_add_x, v_config.px_to_add_y + v*(v_config.radius*2 + v_config.border), v_config.radius, 0, 2 * M_PI);
 		cairo_stroke_preserve(cr);
 		
-		cairo_set_source_rgb(cr, middle, middle, middle);
+		cairo_set_source_rgb(cr, middle_col, middle_col, middle_col);
 		cairo_fill(cr);
+
+		sprintf(str, "i%i", v+1);
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
+		cairo_move_to(cr, v_config.px_to_add_x-50, v_config.px_to_add_y+7 + v*(v_config.radius*2 + v_config.border)); 
+		cairo_show_text(cr, str);  
+		cairo_stroke(cr);
+		memset(str,'\0', 80);
+
+	}
+
+	o = 0;
+	select_first_or(&ors);
+	while(is_active_or(&ors)){
+		// printf("%i\n", ors.Active->class);
+
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
+
+		cairo_arc(cr, o_config.px_to_add_x, o_config.px_to_add_y + o*(o_config.radius*2 + o_config.border), o_config.radius, 0, 2 * M_PI);
+		cairo_stroke_preserve(cr);
+		
+		cairo_set_source_rgb(cr, middle_col, middle_col, middle_col);
+		cairo_fill(cr);
+
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
+		cairo_move_to(cr, o_config.px_to_add_x-15, o_config.px_to_add_y+7 + o*(o_config.radius*2 + o_config.border)); 
+  		cairo_show_text(cr, "OR");  
+		cairo_stroke(cr);
+		
+		sprintf(str, "Class %i", ors.Active->class);
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
+		cairo_move_to(cr, o_config.px_to_add_x+50, o_config.px_to_add_y+7 + o*(o_config.radius*2 + o_config.border)); 
+		cairo_show_text(cr, str);  
+		cairo_stroke(cr);
+		memset(str,'\0', 80);
 
 		select_next_or(&ors);	
 		o++;		
 	}
 
-	h = 1;
+	h = 0;
 	select_first_hypersphere(&hyperspheres);
 	while(is_active_hypersphere(&hyperspheres)){
 		// printf("%i\n", hyperspheres.Active->class);
 		cairo_set_source_rgb(cr, line, line, line);
 		cairo_set_line_join(cr, CAIRO_LINE_JOIN_BEVEL); 
-		cairo_set_line_width(cr, 4);
+		cairo_set_line_width(cr, 2);
 
-		for(v = 1; v <= vectors.dimensions; v++){
-			cairo_move_to(cr, 61, v*50);
-			cairo_line_to(cr, 220, h*80);
+		for(v = 0; v < vectors.dimensions; v++){
+			cairo_move_to(cr, v_config.px_to_add_x + v_config.radius, v_config.px_to_add_y + v*(v_config.radius*2 + v_config.border));
+			cairo_line_to(cr, h_config.px_to_add_x - h_config.radius, h_config.px_to_add_y + h*(h_config.radius*2 + h_config.border));
+			cairo_stroke(cr);
 		}
-		cairo_stroke(cr);
 
-		o = 1;
-
+		o = 0;
 		select_first_or(&ors);
 		while(is_active_or(&ors)){
-			printf("%i\n", ors.Active->class);
 
 			if(ors.Active == hyperspheres.Active->or_layer){
-				cairo_move_to(cr, 430, o*70);
-				cairo_line_to(cr, 220, h*80);
+				cairo_move_to(cr, o_config.px_to_add_x-o_config.radius, o_config.px_to_add_y + o*(o_config.radius*2 + o_config.border));
+				cairo_line_to(cr, h_config.px_to_add_x+h_config.radius, h_config.px_to_add_y + h*(h_config.radius*2 + h_config.border));
 				cairo_stroke(cr);
 				break;
 			}
@@ -184,55 +310,58 @@ gboolean open_vector_editor(GtkWidget *widget, GdkEventButton *event, gpointer *
 			o++;		
 		}		
 
-		cairo_set_source_rgb(cr, border, border, border);
-		cairo_set_line_width(cr, 9);
+		cairo_set_line_width(cr, 5);
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
 
-		cairo_arc(cr, 250, 0 + h*80, 30, 0, 2 * M_PI);
+		cairo_arc(cr, h_config.px_to_add_x, h_config.px_to_add_y + h*(h_config.radius*2 + h_config.border), h_config.radius, 0, 2 * M_PI);
 		cairo_stroke_preserve(cr);
 		
-		cairo_set_source_rgb(cr, middle, middle, middle);
+		cairo_set_source_rgb(cr, middle_col, middle_col, middle_col);
 		cairo_fill(cr);
-
+		
+		sprintf(str, "%2.2f", hyperspheres.Active->radius);
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
+		cairo_move_to(cr, h_config.px_to_add_x-19, h_config.px_to_add_y+5 + h*(h_config.radius*2 + h_config.border));  
+  		cairo_show_text(cr, str);  
+  		memset(str,'\0', 80);
 		select_next_hypersphere(&hyperspheres);			
 		h++;
 	}
 
+	copy(old_surface, surface);
+}
 
-	// cairo_set_source_rgb(cr, 0, 1, 1);
-
-	// cairo_move_to(cr, 12, 10);
-
-	// cairo_line_to(cr, 100, 100);
-	// cairo_stroke(cr);
-
+gboolean draw_event(GtkWidget *widget, cairo_t *cr, gpointer data)
+{
+	// config_items();	
+	cairo_set_source_surface(cr, surface, 0, 0);
+	cairo_paint(cr);
 
 
+	printf("%s\n", "draw");
 
-	g_print("draw\n");
+
 	return FALSE;
 }
 
+
 int main(int argc, char *argv[])
 {
-	// GtkWidget *draw;
-	// /* inicializace GTK+ */
-	gtk_init(&argc, &argv);
 
-	// int aflag = 0;
-	// int bflag = 0;
+	pthread_t rce_thread;
+
+    // if (pthread_mutex_init(&lock, NULL) != 0)
+    // {
+    //     fprintf (stderr, "Mutex init failed\n");
+    //     return 1;
+    // }
+
 	char *file_name = NULL;
-	// int index;
 	int c;
 
 	opterr = 0;
 	while ((c = getopt (argc, argv, "i:")) != -1){
 		switch (c) {
-			// case 'a':
-			// 	aflag = 1;
-			// 	break;
-			// case 'b':
-			// 	bflag = 1;
-			// 	break;
 			case 'i':
 				file_name = optarg;
 				break;
@@ -248,46 +377,54 @@ int main(int argc, char *argv[])
 				abort ();
 		}
 	}
-	// printf ("aflag = %d, bflag = %d, cvalue = %s\n", aflag, bflag, cvalue);
 
-	// for (index = optind; index < argc; index++)
-		// printf ("Non-option argument %s\n", argv[index]);
-
-	if(file_name != NULL)
+	if(file_name != NULL) {
 		parser(&vectors, file_name);
-	else 
+	}
+	else {
 		init_input_vector_list(&vectors, 0, 3.5);
+	}
+
+
 
 	init_hyperspheres_list(&hyperspheres);
 	init_ors_list(&ors);
 
+	if(pthread_create(&rce_thread, NULL, rce_main, NULL)) {
+
+		fprintf(stderr, "Error creating thread\n");
+		return 1;
+
+	}
+
+		// rce_main(&vectors, &hyperspheres, &ors);	
+	gtk_init(&argc, &argv);
+
 
 	GtkBuilder *builder;
 	GtkWidget *window;
-	// GtkWidget *draw;
 	
-	builder = gtk_builder_new_from_file("glade/rce.glade");
+	builder = gtk_builder_new_from_file("glade/rce1.glade");
 	gtk_builder_connect_signals(builder, NULL);
 
 	window = GTK_WIDGET(gtk_builder_get_object (builder, "window1"));
-	// draw = GTK_WIDGET(gtk_builder_get_object (builder, "drawingarea1"));
 	
 	g_object_unref(builder);
-	// gtk_widget_add_events(window, GDK_BUTTON_PRESS_MASK );
-	// g_signal_connect(G_OBJECT(window), "button-press-event", G_CALLBACK(start_rce_step), NULL);
-	
-	// g_signal_connect(G_OBJECT(draw), "button-release-event", G_CALLBACK(draw_release), NULL);
-	// gtk_widget_add_events(draw, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK 	);
-	
-	// g_timeout_add(100, (GSourceFunc) time_handler, (gpointer) window);
-	
-// ######################### BUILDER STUFF END ##########################
+
+
 	gtk_widget_show_all(window);
+
 	gtk_main();
+
+
 
 	dispose_input_vector_list(&vectors);
 	dispose_ors_list(&ors);
 	dispose_hyperspheres_list(&hyperspheres);
 
+	pthread_cancel(rce_thread);
+	pthread_join(rce_thread, NULL);
+	pthread_mutex_destroy(&lock);
+	
 	return 0;
 }

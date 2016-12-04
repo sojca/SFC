@@ -35,5 +35,6 @@ void select_first_hypersphere (HYPERSPHERES *);
 void select_last_hypersphere (HYPERSPHERES *);
 void select_next_hypersphere(HYPERSPHERES *);
 int is_active_hypersphere(HYPERSPHERES *);
+int size_of_hypersphere_list(HYPERSPHERES *);
 
 #endif

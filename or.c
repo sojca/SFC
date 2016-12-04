@@ -139,3 +139,18 @@ OR get_or_with_class(ORS *L, int class){
 	}
 	return NULL;	
 }
+
+int size_of_ors_list (ORS *L) {
+
+	OR ptr = L->Active;
+	int count = 0;
+
+	select_first_or(L);
+	while(is_active_or(L)){
+		count++;
+		select_next_or(L);
+	}
+
+	L->Active = ptr;
+	return count;
+}
