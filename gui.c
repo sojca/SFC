@@ -17,14 +17,26 @@
 #include "or.h"
 #include "rce.h"
 
-
+struct w
+{
+	GtkWidget *statusbar;
+	
+	GtkWidget *start;
+	GtkWidget *next;
+	GtkWidget *clear;
+	
+} widgets;
 
 static cairo_surface_t *surface, *old_surface;
 
+int status = START;
+
 pthread_mutex_t lock_rce = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock_status = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lock_mem = PTHREAD_MUTEX_INITIALIZER;
+
 pthread_cond_t cond_rce = PTHREAD_COND_INITIALIZER;
-pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+
 
 I_VECTORS vectors;
 HYPERSPHERES hyperspheres;
@@ -76,11 +88,137 @@ gboolean next_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer *data)
 	gtk_widget_queue_draw (toplevel);
 
 
-
 	draw_network();
 	gtk_widget_queue_draw (toplevel);
 
+	change_status();
+	
+
 	return TRUE;
+}
+
+
+
+void change_status() {
+
+	int s = 0;
+	
+	pthread_mutex_lock(&lock_status);
+	s = status;
+	pthread_mutex_unlock(&lock_status);
+
+	gchar *info = NULL;
+	guint id;
+	
+	id = gtk_statusbar_get_context_id(GTK_STATUSBAR(widgets.statusbar), "info");
+	
+	switch(s) {
+	
+		case START:
+			gtk_widget_set_sensitive (widgets.start, TRUE);
+			gtk_widget_set_sensitive (widgets.next, FALSE);
+			gtk_widget_set_sensitive (widgets.clear, FALSE);
+
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf("Click on start");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+		
+			break;
+		
+		case STARTED:
+			
+			gtk_widget_set_sensitive (widgets.start, FALSE);
+			gtk_widget_set_sensitive (widgets.next, TRUE);
+			gtk_widget_set_sensitive (widgets.clear, TRUE);
+
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Click on next .. ");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+		
+			break;
+	
+		case SET_INPUT:
+			
+			gtk_widget_set_sensitive (widgets.start, FALSE);
+			gtk_widget_set_sensitive (widgets.next, FALSE);
+			gtk_widget_set_sensitive (widgets.clear, FALSE);
+			
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Set input");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+		
+			break;
+
+		case CLEARED:
+			
+			gtk_widget_set_sensitive (widgets.start, TRUE);
+			gtk_widget_set_sensitive (widgets.next, FALSE);
+			gtk_widget_set_sensitive (widgets.clear, FALSE);
+			
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Removed network, click on start .. ");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+		
+			break;
+
+		case NEW_HYPERSPHERE:
+
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Added new HYPERSPHERE");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+		
+			break;
+
+		case NEW_HYPERSPHERE_WITH_OR:
+
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Added new HYPERSPHERE with new OR");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+		
+			break;
+		
+		case HIT:
+		// add vector
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Input vector hit a hypersphere");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+
+		break;
+
+		case CHANGED_RADIUS:
+
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Changed radius of a hypersphere");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+
+		break;
+
+		case NOT_END:	
+			gtk_widget_set_sensitive (widgets.start, FALSE);
+			gtk_widget_set_sensitive (widgets.next, TRUE);
+			gtk_widget_set_sensitive (widgets.clear, TRUE);
+
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("Starting iterate over vectors again (modif = true), click on next");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+
+		break;
+
+		case END:	
+			gtk_widget_set_sensitive (widgets.start, FALSE);
+			gtk_widget_set_sensitive (widgets.next, FALSE);
+			gtk_widget_set_sensitive (widgets.clear, TRUE);
+
+			gtk_statusbar_remove_all(GTK_STATUSBAR(widgets.statusbar), id);
+			info = g_strdup_printf ("End of creating neuron network (modif = false)");
+			gtk_statusbar_push(GTK_STATUSBAR(widgets.statusbar), id, info);
+
+		break;
+	}
+	
+	g_free(info);
+
+
 }
 
 
@@ -92,14 +230,14 @@ gboolean clear_rce_drawing(GtkWidget *widget, GdkEventButton *event, gpointer *d
 	dispose_ors_list(&ors);
 	dispose_hyperspheres_list(&hyperspheres);
 
+	pthread_mutex_lock(&lock_status);
+	status = CLEARED;
+	pthread_mutex_unlock(&lock_status);
+	
 	clear(toplevel, toplevel);
 
-	return TRUE;
-}
+	change_status();
 
-
-gboolean stop_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer *data) {
-	
 	return TRUE;
 }
 
@@ -115,16 +253,38 @@ gboolean start_rce_step(GtkWidget *widget, GdkEventButton *event, gpointer data)
 
 	draw_network();
 	gtk_widget_queue_draw (toplevel);
-
+	
+	pthread_mutex_lock(&lock_status);
+	status = STARTED;
+	pthread_mutex_unlock(&lock_status);
+	
+	change_status();
 	return TRUE;
 }
 
 
 gboolean open_vector_editor(GtkWidget *widget, GdkEventButton *event, gpointer *data) {
+	GtkWidget *toplevel;
+	toplevel = gtk_widget_get_toplevel(widget);
+	int response = 0;
 	
+	if(status != SET_INPUT){
+
+		response = warn_dialog(toplevel);
+
+		if(response != GTK_RESPONSE_OK){
+
+			return TRUE;
+		}
+	}
+
 	create_vector_editor();
 
-	config_items();	
+	clear_rce_drawing(widget, event, data);
+	
+	pthread_mutex_lock(&lock_status);
+	status = START;
+	pthread_mutex_unlock(&lock_status);
 
 	return TRUE;
 }
@@ -144,23 +304,30 @@ static void copy(cairo_surface_t *dest, cairo_surface_t *source) {
 gboolean draw_config(GtkWidget *widget, GdkEvent *event, gpointer data) {
 
 	GtkAllocation allocation;
-	int w;
+	int w, h;
+
+	if(status > START)
+		h = MAX(MAX(h_config.height + h_config.px_to_add_y, o_config.height + o_config.px_to_add_y), v_config.height + v_config.px_to_add_y);
+	else
+		h = 0;
 	
 	gtk_widget_get_allocation(widget, &allocation);
-	
+
 	w = (allocation.width > 800) ? allocation.width : 800;
+	h = (allocation.height > h) ? allocation.height : h+100;
+
 	if(surface == NULL) {
 		
 		surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
-				CAIRO_CONTENT_COLOR, w, 1500);
+				CAIRO_CONTENT_COLOR, w, h);
 		old_surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
-				CAIRO_CONTENT_COLOR, w, 1500);
+				CAIRO_CONTENT_COLOR, w, h);
 		clear(widget, widget);
 	}
 	else {
 		
 		surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
-				CAIRO_CONTENT_COLOR, w, 1500);
+				CAIRO_CONTENT_COLOR, w, h);
 
 		cairo_t *cr;
 		cr = cairo_create(surface);
@@ -171,7 +338,7 @@ gboolean draw_config(GtkWidget *widget, GdkEvent *event, gpointer data) {
 		cairo_destroy(cr);
 
 		old_surface = gdk_window_create_similar_surface(gtk_widget_get_window(widget),
-			CAIRO_CONTENT_COLOR, w, 1500);
+			CAIRO_CONTENT_COLOR, w, h);
 		cr = cairo_create(old_surface);
 		cairo_set_source_rgb(cr, 1, 1, 1);
 		cairo_paint (cr);
@@ -198,17 +365,17 @@ void config_items() {
 	o_config.border = 30;
 	
 	v_config.px_to_add_x = 100; 
-	h_config.px_to_add_x = 400;
-	o_config.px_to_add_x = 600;
+	h_config.px_to_add_x = 300;
+	o_config.px_to_add_x = 450;
 
 	v_config.radius = 10; 
 	h_config.radius = 30;
 	o_config.radius = 20;
 
 
-	v_config.px_to_add_y = v_config.radius + v_config.border; 
-	h_config.px_to_add_y = h_config.radius + h_config.border;
-	o_config.px_to_add_y = o_config.radius + o_config.border;
+	v_config.px_to_add_y = v_config.radius + v_config.border + 15; 
+	h_config.px_to_add_y = h_config.radius + h_config.border + 15;
+	o_config.px_to_add_y = o_config.radius + o_config.border + 15;
 
 	v_config.height = v_config.count*(v_config.radius*2 + v_config.border);
 	h_config.height = h_config.count*(h_config.radius*2 + h_config.border);
@@ -225,15 +392,11 @@ void config_items() {
 		o_config.px_to_add_y += ABS(o_config.height-v_config.height)/2;
 	}
 
-	printf("vectors %i %i\n", v_config.count, v_config.px_to_add_y);
-	printf("hypersp %i %i\n", h_config.count, h_config.px_to_add_y);
-	printf("hypersp %i %i\n", o_config.count, o_config.px_to_add_y);
 }
 
 
 void draw_network() {
 	
-
 	cairo_t *cr;
 	cr = cairo_create(surface);
 	int v, h, o;
@@ -270,6 +433,13 @@ void draw_network() {
 		cairo_show_text(cr, str);  
 		cairo_stroke(cr);
 		memset(str,'\0', 80);
+
+		sprintf(str, "i%i", v+1);
+		cairo_set_source_rgb(cr, border_col, border_col, border_col);
+		cairo_move_to(cr, 600 + v*50, 50); 
+		cairo_show_text(cr, str);  
+		cairo_stroke(cr);
+		memset(str,'\0', 80);
 	}
 
 	o = 0;
@@ -291,7 +461,7 @@ void draw_network() {
 		
 		sprintf(str, "Class %i", ors.Active->class);
 		cairo_set_source_rgb(cr, border_col, border_col, border_col);
-		cairo_move_to(cr, o_config.px_to_add_x+50, o_config.px_to_add_y+7 + o*(o_config.radius*2 + o_config.border)); 
+		cairo_move_to(cr, o_config.px_to_add_x+30, o_config.px_to_add_y+7 + o*(o_config.radius*2 + o_config.border)); 
 		cairo_show_text(cr, str);  
 		cairo_stroke(cr);
 		memset(str,'\0', 80);
@@ -343,7 +513,19 @@ void draw_network() {
 		cairo_move_to(cr, h_config.px_to_add_x-19, h_config.px_to_add_y+5 + h*(h_config.radius*2 + h_config.border));  
   		cairo_show_text(cr, str);  
   		memset(str,'\0', 80);
-		select_next_hypersphere(&hyperspheres);			
+
+
+		for(v = 0; v < vectors.dimensions; v++) {
+
+			sprintf(str, "%i", hyperspheres.Active->i[v]);
+			cairo_set_source_rgb(cr, border_col, border_col, border_col);
+			cairo_move_to(cr, 600 + v*50, h_config.px_to_add_y+5 + h*(h_config.radius*2 + h_config.border)); 
+			cairo_show_text(cr, str);  
+			cairo_stroke(cr);
+			memset(str,'\0', 80);
+		}
+
+		select_next_hypersphere(&hyperspheres);		
 		h++;
 	}
 	
@@ -395,12 +577,14 @@ int main(int argc, char *argv[]) {
 	if(file_name != NULL) {
 
 		parser(&vectors, file_name);
+		status = START;
 	}
 	else {
 
 		init_input_vector_list(&vectors, 0, 3.5);
-	}
+		status = SET_INPUT;
 
+	}
 
 
 	init_hyperspheres_list(&hyperspheres);
@@ -415,14 +599,20 @@ int main(int argc, char *argv[]) {
 
 	gtk_init(&argc, &argv);
 
-	builder = gtk_builder_new_from_file("glade/rce1.glade");
+	builder = gtk_builder_new_from_file("glade/rce.glade");
 	gtk_builder_connect_signals(builder, NULL);
 
 	window = GTK_WIDGET(gtk_builder_get_object (builder, "window1"));
-	
+	widgets.statusbar = GTK_WIDGET(gtk_builder_get_object (builder, "statusbar"));
+	widgets.start = GTK_WIDGET(gtk_builder_get_object (builder, "start_btn"));
+	widgets.next = GTK_WIDGET(gtk_builder_get_object (builder, "next_btn"));
+	widgets.clear = GTK_WIDGET(gtk_builder_get_object (builder, "clear_btn"));
+		
 	g_object_unref(builder);
 
 	gtk_widget_show_all(window);
+	change_status();
+	
 
 	gtk_main();
 
@@ -434,6 +624,7 @@ int main(int argc, char *argv[]) {
 	pthread_cancel(rce_thread);
 	pthread_join(rce_thread, NULL);
 	pthread_mutex_destroy(&lock_mem);
+	pthread_mutex_destroy(&lock_status);
 	pthread_mutex_destroy(&lock_rce);
 	pthread_cond_destroy(&cond_rce);
 

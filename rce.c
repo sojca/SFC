@@ -11,8 +11,11 @@
 #include "or.h"
 #include "rce.h"
 
+extern int status;
+
 extern pthread_mutex_t lock_rce;
 extern pthread_mutex_t lock_mem;
+extern pthread_mutex_t lock_status;
 extern pthread_cond_t cond_rce;
 
 
@@ -208,9 +211,18 @@ void parser(I_VECTORS *list_vect, char *file_name)
 	fclose(fp);
 }
 
+
 void next_step(){
 
 	pthread_cond_signal(&cond_rce);
+}
+
+
+void set_status(int s){
+
+	pthread_mutex_lock(&lock_status);
+	status = s;
+	pthread_mutex_unlock(&lock_status);
 }
 
 
@@ -221,66 +233,105 @@ void *rce_main()
 	bool modif = false;
 	bool hit = false;
 	
-	pthread_mutex_lock(&lock_rce);
-	
-	pthread_cond_wait(&cond_rce, &lock_rce);
 
-	do {
-		modif = false;
+	while(true) {
+		
+		pthread_mutex_lock(&lock_rce);
 
-		select_first_input_vector(&vectors);
-		while(is_active_input_vector(&vectors)){
-			hit = false;
+		do {
 			
-			pthread_mutex_lock(&lock_mem);
-			select_first_hypersphere(&hyperspheres);
-			while(is_active_hypersphere(&hyperspheres)){
-				double distance = 0;
+			modif = false;
 
-				for(i = 0; i < (&vectors)->dimensions; i++){
-					distance += pow((&vectors)->Active->i[i] - (&hyperspheres)->Active->i[i], 2);
-				}
-				distance = sqrt(distance);
-
-				if (distance <= (&hyperspheres)->Active->radius){
-					if((&hyperspheres)->Active->class == (&vectors)->Active->class){
-						hit = true;
-					}
-					else{
-						(&hyperspheres)->Active->radius = distance / 2.0;	
-						modif = true;
-					}
-				}
-
-				select_next_hypersphere(&hyperspheres);			
-			}
-
-			if(!hit){
-				insert_last_hypersphere((&hyperspheres), (&vectors)->radius, (&vectors)->Active->class, (&vectors)->Active->i, (&vectors)->dimensions);
-				select_last_hypersphere(&hyperspheres);	
-
-				modif = true;
-				if(is_exist_or_with_class((&ors), (&hyperspheres)->Active->class)){
-					(&hyperspheres)->Active->or_layer = get_or_with_class((&ors), (&hyperspheres)->Active->class);
-				}
-				else{
-					insert_last_or((&ors), (&hyperspheres)->Active->class);
-					select_last_or(&ors);
-
-					(&hyperspheres)->Active->or_layer = (&ors)->Active;
-				}
-			}
-			
-			pthread_mutex_unlock(&lock_mem);
 			pthread_cond_wait(&cond_rce, &lock_rce);
 
+			select_first_input_vector(&vectors);
+			while(is_active_input_vector(&vectors)){
 
-			select_next_input_vector(&vectors);
-		}
+				hit = false;
+				
+				pthread_mutex_lock(&lock_mem);
+				select_first_hypersphere(&hyperspheres);
 
-	} while(modif);
+				while(is_active_hypersphere(&hyperspheres)){
 
-	pthread_mutex_unlock(&lock_rce);
+					double distance = 0;
+
+					for(i = 0; i < (&vectors)->dimensions; i++){
+
+						distance += pow((&vectors)->Active->i[i] - (&hyperspheres)->Active->i[i], 2);
+					}
+
+					distance = sqrt(distance);
+
+					if (distance <= (&hyperspheres)->Active->radius){
+
+						if((&hyperspheres)->Active->class == (&vectors)->Active->class){
+
+							hit = true;
+						}
+						else{
+							
+							modif = true;
+							(&hyperspheres)->Active->radius = distance / 2.0;	
+							set_status(CHANGED_RADIUS);
+							
+							pthread_mutex_unlock(&lock_mem);
+							
+							pthread_cond_wait(&cond_rce, &lock_rce);
+							
+							pthread_mutex_lock(&lock_mem);
+
+						}
+					}
+
+					select_next_hypersphere(&hyperspheres);			
+				}
+
+				if(!hit){
+
+					insert_last_hypersphere((&hyperspheres), (&vectors)->radius, (&vectors)->Active->class, (&vectors)->Active->i, (&vectors)->dimensions);
+					select_last_hypersphere(&hyperspheres);	
+
+					modif = true;
+
+					if(is_exist_or_with_class((&ors), (&hyperspheres)->Active->class)){
+
+						(&hyperspheres)->Active->or_layer = get_or_with_class((&ors), (&hyperspheres)->Active->class);
+
+						set_status(NEW_HYPERSPHERE);
+					}
+					else{
+
+						insert_last_or((&ors), (&hyperspheres)->Active->class);
+						select_last_or(&ors);
+						(&hyperspheres)->Active->or_layer = (&ors)->Active;
+
+						set_status(NEW_HYPERSPHERE_WITH_OR);
+					}
+
+				}
+				else {
+					set_status(HIT);
+				}
+				
+				pthread_mutex_unlock(&lock_mem);
+				
+				pthread_cond_wait(&cond_rce, &lock_rce);
+
+				select_next_input_vector(&vectors);
+			}
+
+			if(modif)
+				set_status(NOT_END);
+			else
+				set_status(END);
+
+
+		} while(modif);
+		
+		pthread_mutex_unlock(&lock_rce);
+
+	}
 
 
 	return NULL;

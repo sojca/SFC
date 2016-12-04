@@ -6,6 +6,7 @@
 #include "or.h"
 
 
+
 typedef struct config {
 	int count;
 	int height;
@@ -17,6 +18,6 @@ typedef struct config {
 
 void config_items();
 void draw_network();
-// int start(int, char**, I_VECTORS* , HYPERSPHERES*, ORS*);
+void change_status();
 
 #endif

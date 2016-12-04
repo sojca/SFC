@@ -6,15 +6,6 @@
 
 
 void init_hyperspheres_list (HYPERSPHERES *L) {
-/*
-** Provede inicializaci seznamu L před jeho prvním použitím (tzn. žádná
-** z následujících funkcí nebude volána nad neinicializovaným seznamem).
-** Tato inicializace se nikdy nebude provádět nad již inicializovaným
-** seznamem, a proto tuto možnost neošetřujte. Vždy předpokládejte,
-** že neinicializované proměnné mají nedefinovanou hodnotu.
-** ---------------------------------------------------------------------
-** ukazateľ na prvý a aktuálny prvok sa vynulujú 
-**/
 
 	L->Active = NULL;
 	L->First = NULL;	
@@ -22,16 +13,6 @@ void init_hyperspheres_list (HYPERSPHERES *L) {
 }
 
 void dispose_hyperspheres_list (HYPERSPHERES *L) {
-/*
-** Zruší všechny prvky seznamu L a uvede seznam L do stavu, v jakém se nacházel
-** po inicializaci. Veškerá paměť používaná prvky seznamu L bude korektně
-** uvolněna voláním operace free.
-** ---------------------------------------------------------------------
-** Ptr,DelPtr - pomocné ukazatele
-** do Ptr priradíme prvý, resp. nasledujúci prvok
-** do DelPtr priradzujeme Ptr, tak aby sme nestratili Ptr pri uvoľnení DelPtr
-** nakoniec vynulujeme ukazatele First a Act
-**/
 
 	HYPERSPHERE ptr, delptr;
 	ptr = L->First;
@@ -50,16 +31,6 @@ void dispose_hyperspheres_list (HYPERSPHERES *L) {
 }
 
 void insert_first_hypersphere (HYPERSPHERES *L, double radius, int class, int *vector, int len) {
-/*
-** Vloží prvek s hodnotou val na začátek seznamu L.
-** V případě, že není dostatek paměti pro nový prvek při operaci malloc,
-** volá funkci Error().
-** ---------------------------------------------------------------------
-** do pomocného ukazateľa Ptr sme alokovali miesto o veľkosti štruktúry tElem,
-** vložíme data do štruktúry, do ukazateľa na naseldujúci prvok ptr vložíme,
-** ukazateľ na prvý prvok a následne ukazateľ Ptr spravíme ako nový prvý prvok
-** ak nie je miesto/chyba malloc, tak voláme Error()
-**/
 
 	HYPERSPHERE ptr = malloc(sizeof(struct hypersphere));
 	if(ptr == NULL)
@@ -87,16 +58,6 @@ void insert_first_hypersphere (HYPERSPHERES *L, double radius, int class, int *v
 }
 
 void insert_last_hypersphere (HYPERSPHERES *L, double radius, int class, int *vector, int len) {
-/*
-** Vloží prvek s hodnotou val na začátek seznamu L.
-** V případě, že není dostatek paměti pro nový prvek při operaci malloc,
-** volá funkci Error().
-** ---------------------------------------------------------------------
-** do pomocného ukazateľa Ptr sme alokovali miesto o veľkosti štruktúry tElem,
-** vložíme data do štruktúry, do ukazateľa na naseldujúci prvok ptr vložíme,
-** ukazateľ na prvý prvok a následne ukazateľ Ptr spravíme ako nový prvý prvok
-** ak nie je miesto/chyba malloc, tak voláme Error()
-**/
 
 	HYPERSPHERE ptr = malloc(sizeof(struct hypersphere));
 	if(ptr == NULL)

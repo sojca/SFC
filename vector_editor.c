@@ -16,18 +16,38 @@ int nvectors = 0;
 
 extern I_VECTORS vectors;
 
+int warn_dialog(GtkWidget *top) {
 
-int create_vector_editor(){
+	GtkWidget *dialog, *label;
+	int response_id;
+	
+	dialog = gtk_dialog_new_with_buttons("Warning", 	/* window title */
+			GTK_WINDOW(top),	/* parent - transient for */
+			GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+			"_OK", GTK_RESPONSE_OK,
+			"_Cancel", GTK_RESPONSE_CANCEL,
+			NULL);
+
+	label = gtk_label_new("Opening an editor removes created network.");
+	gtk_widget_set_margin_bottom(label, 15);
+	gtk_widget_set_margin_top(label, 15);
+	gtk_widget_set_margin_start(label, 50);
+	gtk_widget_set_margin_end(label, 50);
+	gtk_box_pack_start(GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), label, TRUE, TRUE, 5);
+
+	gtk_widget_show(label);
+	response_id = gtk_dialog_run(GTK_DIALOG(dialog));   
+
+	gtk_widget_destroy(dialog);
+	return response_id;
+}
+
+void create_vector_editor(){
 	
 	GtkBuilder *builder = NULL;
 	GtkWidget *dialog = NULL;
 
 	int i,j;
-	int response_id;
-	// GtkSpinButton *sd;
-	// GtkSpinButton *vd;
-	// int class;
-	// GtkAdjustment *vector_adjustment;
 	
 	
 	builder = gtk_builder_new_from_file("glade/editor.glade");
@@ -70,11 +90,10 @@ int create_vector_editor(){
 	}
 
 	g_object_unref(builder);
-	response_id = gtk_dialog_run(GTK_DIALOG(dialog));
+	gtk_dialog_run(GTK_DIALOG(dialog));
 	
 	gtk_widget_destroy(dialog);
 
-	return response_id;
 }
 		
 void add_dimension() {	

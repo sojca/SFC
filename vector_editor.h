@@ -9,14 +9,14 @@ typedef struct dimension {
 } DIMENSION;
 
 
-int	create_vector_editor();
+void		create_vector_editor();
+int			warn_dialog(GtkWidget*);
+void 		create_class_spinbutton(int, int, int);
+void 		create_vector_spinbutton(int, int, int);
 
-void create_class_spinbutton(int, int, int);
-void create_vector_spinbutton(int, int, int);
+void 		create_vector_label(int);
+void 		create_dimension_label(int);
 
-void create_vector_label(int);
-void create_dimension_label(int);
-
-DIMENSION* create_dimension (int, int );
+DIMENSION* 	create_dimension (int, int );
 
 #endif
